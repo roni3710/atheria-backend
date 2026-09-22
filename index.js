@@ -28,7 +28,7 @@ app.post('/chat', async (req, res) => {
 
     // Using gemini-1.5-flash as the robust, standard model choice
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       systemInstruction: SYSTEM_INSTRUCTION
     });
 
