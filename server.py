@@ -1,6 +1,7 @@
 import os
 import base64
 import requests
+import asyncio # NEW: Required for timing and pacing
 from fastapi import FastAPI, WebSocket
 from gtts import gTTS
 from pydub import AudioSegment
@@ -66,8 +67,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         
                     ai_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
                     
-                    # NEW: Send the text response directly to the ESP32
+                    # 1. Send text and explicitly yield the event loop to flush the data instantly
                     await websocket.send_text(f"AI_TEXT:{ai_text}")
+                    await asyncio.sleep(0.1) 
                     
                     tts = gTTS(text=ai_text, lang='en') 
                     tts.save("temp_out.mp3")
@@ -76,9 +78,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     out_audio = out_audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
                     raw_pcm = out_audio.raw_data
                     
+                    # 2. Paced Audio Streaming
+                    # 16000Hz * 2 bytes = 32000 bytes per second. 
+                    # Sending 1024 bytes every ~0.03 seconds perfectly matches playback speed.
                     chunk_size = 1024
                     for i in range(0, len(raw_pcm), chunk_size):
                         await websocket.send_bytes(raw_pcm[i:i+chunk_size])
+                        await asyncio.sleep(0.03) # Paces data so ESP32 buffer doesn't overflow
                         
                     await websocket.send_text("PLAYBACK_COMPLETE")
                     
