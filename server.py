@@ -1,27 +1,18 @@
 import os
-import io
+import base64
+import requests
 from fastapi import FastAPI, WebSocket
-import google.generativeai as genai
 from gtts import gTTS
 from pydub import AudioSegment
 
 app = FastAPI()
 
-# FIX 1: Add a dummy homepage so Render stops throwing 404 errors in the logs
+# Dummy homepage to stop Render 404 logs
 @app.get("/")
 def read_root():
     return {"status": "Atheria AI Server is Online!"}
 
-# Configure Gemini
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
-# FIX 2: Added 'models/' prefix to the model name to fix the Gemini API 404 error
-model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash",
-    system_instruction="You are Atheria, an AI assistant created by Ratul Hawlader. "
-                       "If asked who created you, say 'I was created by Ratul Hawlader' in the user's language. "
-                       "Respond strictly in under 2 sentences. Detect the language and respond in English, Bengali, or Hindi."
-)
+API_KEY = os.environ.get("GEMINI_API_KEY")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -49,18 +40,42 @@ async def websocket_endpoint(websocket: WebSocket):
                     audio_segment.export("temp_in.wav", format="wav")
                     audio_buffer.clear() # Reset for next recording
                     
-                    # 2. Read the WAV file as raw bytes
+                    # 2. Read the WAV file and encode to Base64
                     with open("temp_in.wav", "rb") as f:
                         wav_data = f.read()
+                    base64_audio = base64.b64encode(wav_data).decode('utf-8')
                     
-                    # 3. Send inline to Gemini
-                    response = model.generate_content([
-                        {"mime_type": "audio/wav", "data": wav_data},
-                        "Respond to this spoken audio."
-                    ])
+                    # 3. Direct REST API Call (Bypasses all SDK errors)
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+                    
+                    payload = {
+                        "system_instruction": {
+                            "parts": [{"text": "You are Atheria, an AI assistant created by Ratul Hawlader. If asked who created you, say 'I was created by Ratul Hawlader' in the user's language. Respond strictly in under 2 sentences. Detect the language and respond in English, Bengali, or Hindi."}]
+                        },
+                        "contents": [{
+                            "parts": [
+                                {"inline_data": {"mimeType": "audio/wav", "data": base64_audio}},
+                                {"text": "Respond to this spoken audio."}
+                            ]
+                        }]
+                    }
+                    
+                    headers = {"Content-Type": "application/json"}
+                    api_response = requests.post(url, json=payload, headers=headers)
+                    response_data = api_response.json()
+                    
+                    # Check if API returned a valid answer
+                    if "candidates" not in response_data:
+                        print("Google API Error:", response_data)
+                        await websocket.send_text("PLAYBACK_COMPLETE")
+                        continue
+                        
+                    # Extract the text answer
+                    ai_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"Atheria's Answer: {ai_text}")
                     
                     # 4. Convert Gemini Text to Speech (gTTS)
-                    tts = gTTS(text=response.text, lang='en') 
+                    tts = gTTS(text=ai_text, lang='en') 
                     tts.save("temp_out.mp3")
                     
                     # 5. Convert MP3 back to 16kHz, 16-bit Mono PCM for ESP32
