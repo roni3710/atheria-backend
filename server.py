@@ -1,7 +1,7 @@
 import os
 import base64
 import requests
-import asyncio # NEW: Required for timing and pacing
+import asyncio
 from fastapi import FastAPI, WebSocket
 from gtts import gTTS
 from pydub import AudioSegment
@@ -42,11 +42,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         wav_data = f.read()
                     base64_audio = base64.b64encode(wav_data).decode('utf-8')
                     
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-
+                    # 1. Reverted to the correct, active model
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
                     
                     payload = {
-                        "system_instruction": {
+                        # 2. Fixed syntax: systemInstruction MUST be camelCase
+                        "systemInstruction": {
                             "parts": [{"text": "You are Atheria, an AI assistant created by Ratul Hawlader. If asked who created you, say 'I was created by Ratul Hawlader' in the user's language. Respond strictly in under 2 sentences. Detect the language and respond in English, Bengali, or Hindi."}]
                         },
                         "contents": [{
@@ -68,7 +69,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         
                     ai_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
                     
-                    # 1. Send text and explicitly yield the event loop to flush the data instantly
                     await websocket.send_text(f"AI_TEXT:{ai_text}")
                     await asyncio.sleep(0.1) 
                     
@@ -79,13 +79,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     out_audio = out_audio.set_frame_rate(16000).set_channels(1).set_sample_width(2)
                     raw_pcm = out_audio.raw_data
                     
-                    # 2. Paced Audio Streaming
-                    # 16000Hz * 2 bytes = 32000 bytes per second. 
-                    # Sending 1024 bytes every ~0.03 seconds perfectly matches playback speed.
                     chunk_size = 1024
                     for i in range(0, len(raw_pcm), chunk_size):
                         await websocket.send_bytes(raw_pcm[i:i+chunk_size])
-                        await asyncio.sleep(0.03) # Paces data so ESP32 buffer doesn't overflow
+                        await asyncio.sleep(0.03) 
                         
                     await websocket.send_text("PLAYBACK_COMPLETE")
                     
