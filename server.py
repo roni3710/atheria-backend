@@ -42,11 +42,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         wav_data = f.read()
                     base64_audio = base64.b64encode(wav_data).decode('utf-8')
                     
-                    # 1. Reverted to the correct, active model
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
                     
                     payload = {
-                        # 2. Fixed syntax: systemInstruction MUST be camelCase
                         "systemInstruction": {
                             "parts": [{"text": "You are Atheria, an AI assistant created by Ratul Hawlader. If asked who created you, say 'I was created by Ratul Hawlader' in the user's language. Respond strictly in under 2 sentences. Detect the language and respond in English, Bengali, or Hindi."}]
                         },
@@ -62,12 +60,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     api_response = requests.post(url, json=payload, headers=headers)
                     response_data = api_response.json()
                     
+                    # PRINT THE EXACT ERROR TO RENDER LOGS IF IT FAILS
                     if "candidates" not in response_data:
-                        print("Google API Error:", response_data)
+                        print("❌ GOOGLE API REJECTED REQUEST:", response_data)
                         await websocket.send_text("PLAYBACK_COMPLETE")
                         continue
                         
                     ai_text = response_data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"✅ SUCCESS! AI said: {ai_text}")
                     
                     await websocket.send_text(f"AI_TEXT:{ai_text}")
                     await asyncio.sleep(0.1) 
