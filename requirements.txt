@@ -4,4 +4,3 @@ websockets
 google-generativeai
 gtts
 pydub
-pyaudioop
