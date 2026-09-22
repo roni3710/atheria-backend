@@ -54,7 +54,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         },
                         "contents": [{
                             "parts": [
-                                {"inline_data": {"mimeType": "audio/wav", "data": base64_audio}},
+                                {"inlineData": {"mimeType": "audio/wav", "data": base64_audio}},
                                 {"text": "Respond to this spoken audio."}
                             ]
                         }]
