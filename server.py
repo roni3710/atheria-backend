@@ -7,10 +7,17 @@ from pydub import AudioSegment
 
 app = FastAPI()
 
+# FIX 1: Add a dummy homepage so Render stops throwing 404 errors in the logs
+@app.get("/")
+def read_root():
+    return {"status": "Atheria AI Server is Online!"}
+
 # Configure Gemini
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+
+# FIX 2: Added 'models/' prefix to the model name to fix the Gemini API 404 error
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="models/gemini-1.5-flash",
     system_instruction="You are Atheria, an AI assistant created by Ratul Hawlader. "
                        "If asked who created you, say 'I was created by Ratul Hawlader' in the user's language. "
                        "Respond strictly in under 2 sentences. Detect the language and respond in English, Bengali, or Hindi."
@@ -46,7 +53,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     with open("temp_in.wav", "rb") as f:
                         wav_data = f.read()
                     
-                    # 3. Send inline to Gemini (Avoids 400 BadRequest upload errors)
+                    # 3. Send inline to Gemini
                     response = model.generate_content([
                         {"mime_type": "audio/wav", "data": wav_data},
                         "Respond to this spoken audio."
