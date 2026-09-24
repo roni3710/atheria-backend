@@ -60,7 +60,7 @@ async def chat_pipeline(audio: UploadFile = File(...)):
 
     # 2. Gemini Processing
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         contents=transcript,
         config={"system_instruction": SYSTEM_PROMPT},
     )
