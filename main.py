@@ -34,6 +34,7 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
 @app.post("/chat")
 async def chat_pipeline(audio: UploadFile = File(...)):
     raw_audio = await audio.read()
+    print(f"--> Received incoming audio from ESP32. Size: {len(raw_audio)} bytes")
     if not raw_audio:
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
