@@ -7,22 +7,12 @@ from pydub import AudioSegment
 
 app = FastAPI()
 
-# Safely load Gemini API key
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
 SYSTEM_INSTRUCTION = """
 Your name is Atheria. You are an AI voice assistant.
 You are friendly, helpful, and concise.
 You can converse fluently in Bengali, Hindi, and English.
 Keep responses short (1-2 sentences maximum).
 """
-
-model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
-    system_instruction=SYSTEM_INSTRUCTION
-)
 
 @app.get("/")
 def health_check():
@@ -31,6 +21,18 @@ def health_check():
 @app.post("/process-voice")
 async def process_voice(request: Request):
     try:
+        # Load API key dynamically per request
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            print("Error: GEMINI_API_KEY environment variable is missing.")
+            return Response(content=b"API Key Missing", status_code=500)
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+
         audio_bytes = await request.body()
 
         if len(audio_bytes) < 1000:
@@ -62,18 +64,11 @@ async def process_voice(request: Request):
     except Exception as e:
         print(f"Error in backend: {e}")
         return Response(content=b"", status_code=500)
-2. Updated requirements.txt
-Ensure static-ffmpeg is removed so it doesn't conflict with system packages:
-fastapi
-uvicorn
-google-generativeai
-gTTS
-pydub
-3. Updated Dockerfile
-Make sure your Dockerfile explicitly exposes port 8080 and binds Uvicorn to 0.0.0.0:
+Step 2: Update Dockerfile
+Update your Dockerfile to use exec uvicorn so that Cloud Run's injected $PORT variable is bound correctly:
 FROM python:3.11-slim
 
-# Install system dependencies (ffmpeg for audio conversion)
+# Install system dependencies (ffmpeg required by pydub)
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt-get/lists/*
 
 WORKDIR /app
@@ -85,5 +80,5 @@ COPY . .
 
 EXPOSE 8080
 
-# Bind explicitly to 0.0.0.0 and port 8080
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Use exec format so $PORT evaluates cleanly
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
