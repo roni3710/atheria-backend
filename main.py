@@ -1,17 +1,13 @@
 import os
 import io
-import static_ffmpeg
 from fastapi import FastAPI, Request, Response
 import google.generativeai as genai
 from gtts import gTTS
 from pydub import AudioSegment
 
-# Initialize static ffmpeg binaries
-static_ffmpeg.add_paths()
-
 app = FastAPI()
 
-# Safely configure Gemini API key
+# Safely load Gemini API key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -66,3 +62,28 @@ async def process_voice(request: Request):
     except Exception as e:
         print(f"Error in backend: {e}")
         return Response(content=b"", status_code=500)
+2. Updated requirements.txt
+Ensure static-ffmpeg is removed so it doesn't conflict with system packages:
+fastapi
+uvicorn
+google-generativeai
+gTTS
+pydub
+3. Updated Dockerfile
+Make sure your Dockerfile explicitly exposes port 8080 and binds Uvicorn to 0.0.0.0:
+FROM python:3.11-slim
+
+# Install system dependencies (ffmpeg for audio conversion)
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt-get/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8080
+
+# Bind explicitly to 0.0.0.0 and port 8080
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
