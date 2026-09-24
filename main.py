@@ -34,11 +34,12 @@ def pcm_to_wav(pcm_data: bytes, sample_rate: int = 16000) -> bytes:
 @app.post("/chat")
 async def chat_pipeline(audio: UploadFile = File(...)):
     raw_audio = await audio.read()
-    print(f"--> Received incoming audio from ESP32. Size: {len(raw_audio)} bytes")
+    print(f"--> [STEP 1] Received incoming audio from ESP32. Size: {len(raw_audio)} bytes")
+    
     if not raw_audio:
         raise HTTPException(status_code=400, detail="Empty audio payload")
 
-    # 1. Speech to Text (Supports English, Hindi, Bengali)
+    # 1. Speech to Text
     audio_wav = pcm_to_wav(raw_audio, sample_rate=16000)
     audio_obj = speech.RecognitionAudio(content=audio_wav)
     config = speech.RecognitionConfig(
@@ -51,19 +52,20 @@ async def chat_pipeline(audio: UploadFile = File(...)):
 
     stt_response = stt_client.recognize(config=config, audio=audio_obj)
     if not stt_response.results:
+        print("--> [STEP 2] STT Failed: No speech detected in the audio.")
         return Response(content=b"", media_type="audio/wav")
 
     transcript = stt_response.results[0].alternatives[0].transcript
-    print(f"Recognized: {transcript}")
+    print(f"--> [STEP 2] STT Success. User said: '{transcript}'")
 
-    # 2. Gemini Model Processing
+    # 2. Gemini Processing
     response = gemini_client.models.generate_content(
         model="gemini-2.5-flash",
         contents=transcript,
         config={"system_instruction": SYSTEM_PROMPT},
     )
     bot_reply = response.text
-    print(f"Atheria: {bot_reply}")
+    print(f"--> [STEP 3] Gemini Success. Atheria replied: '{bot_reply}'")
 
     # 3. Text to Speech
     synthesis_input = texttospeech.SynthesisInput(text=bot_reply)
@@ -79,5 +81,8 @@ async def chat_pipeline(audio: UploadFile = File(...)):
     tts_response = tts_client.synthesize_speech(
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
+    
+    print(f"--> [STEP 4] TTS Success. Generated {len(tts_response.audio_content)} bytes of audio. Sending to ESP32...")
 
     return Response(content=tts_response.audio_content, media_type="audio/wav")
+
