@@ -93,7 +93,9 @@ async def chat_pipeline(audio: UploadFile = File(...)):
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.LINEAR16,
         sample_rate_hertz=16000,
+        volume_gain_db=8.0  # Boosts the audio volume by 8 decibels
     )
+
 
     tts_response = tts_client.synthesize_speech(
         input=synthesis_input, voice=voice, audio_config=audio_config
